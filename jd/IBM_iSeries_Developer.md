@@ -19,8 +19,6 @@ We are seeking an experienced IBM iSeries Developer with strong expertise in RPG
 
 
 
-
-
 **JOB QUALIFICATIONS:**
 
 - Strong hands-on experience in IBM iSeries (AS/400) development
