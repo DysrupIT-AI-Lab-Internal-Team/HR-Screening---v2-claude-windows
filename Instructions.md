@@ -26,7 +26,7 @@ HR-Screening Windows/
 │   └── IBM_iSeries_Developer.md    ← you already have this
 └── results/                         ← auto-created on first run
 5. Run it
-powershell
+
 cd "C:\Users\YourName\Documents\HR-Screening Windows"
 python hr_screening_tool_v2_win.py
 That's it — the interactive menu will appear and guide you through everything.

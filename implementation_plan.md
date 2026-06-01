@@ -1,12 +1,9 @@
 # Windows-Optimized HR Screening Tool v2
 
-Create `hr_screening_tool_v2_win.py` — a Windows-optimized fork of [hr_screening_tool_v2.py](file:///Users/admin/Documents/Project_HR_Screening_Prototypes/hr_screening_tool_v2.py) that preserves every feature while delivering better performance and reliability on Windows.
+Create `hr_screening_tool_v2_win.py` — a Windows-optimized version of [hr_screening_tool_v2.py](file:///Users/admin/Documents/Project_HR_Screening_Prototypes/hr_screening_tool_v2.py) that preserves every feature while delivering better performance and reliability on Windows.
 
-## Why a Separate File
 
-The original is tuned for macOS (MPS/Apple GPU, macOS path conventions, emoji reliance). Rather than adding `if sys.platform` branches everywhere, a clean Windows-targeted file is more maintainable and lets us apply Windows-specific optimizations without compromise.
-
-## Proposed Changes
+## Changes
 
 ### 1. Process-Based Parallelism (biggest perf win)
 
@@ -70,7 +67,6 @@ The original is tuned for macOS (MPS/Apple GPU, macOS path conventions, emoji re
 - Register `CTRL+C` handler via `signal` for clean shutdown (Windows doesn't handle `KeyboardInterrupt` in subprocesses the same way as Unix)
 - Graceful interrupt: on `Ctrl+C`, finish current resume, save progress, then exit
 
----
 
 ## Feature Parity Checklist
 
@@ -96,15 +92,7 @@ Every feature from the original will be preserved:
 > [!NOTE]
 > The tracking file format (`screening_history_v2.json`) is identical — you can share tracking data between the macOS and Windows versions.
 
----
 
-## Summary of File
-
-#### [NEW] [hr_screening_tool_v2_win.py](file:///Users/admin/Documents/Project_HR_Screening_Prototypes/hr_screening_tool_v2_win.py)
-
-Single new file containing the full Windows-optimized tool.
-
----
 
 ## Verification Plan
 
