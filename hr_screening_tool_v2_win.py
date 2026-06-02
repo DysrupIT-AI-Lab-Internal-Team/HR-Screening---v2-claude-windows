@@ -100,7 +100,7 @@ try:
         _gpu_name = torch.cuda.get_device_name(0)
     else:
         _gpu_name = None
-except ImportError:
+except (ImportError, OSError):
     _gpu_name = None
 
 # DirectML fallback for AMD GPUs (optional)
@@ -109,7 +109,7 @@ if not CUDA_AVAILABLE:
         import torch_directml
         DIRECTML_AVAILABLE = True
         _gpu_name = "DirectML (AMD/Intel GPU)"
-    except ImportError:
+    except (ImportError, OSError):
         pass
 
 try:
@@ -121,7 +121,7 @@ try:
     )
     from docling.document_converter import PdfFormatOption
     PDF_SUPPORT = True
-except ImportError:
+except (ImportError, OSError):
     PDF_SUPPORT = False
 
 
@@ -224,9 +224,38 @@ def _file_lock(filepath, mode="r+"):
 # UTILITIES
 # ─────────────────────────────────────────────
 
+def _find_claude() -> str | None:
+    """
+    Locate the claude CLI executable.
+    Tries shutil.which first, then searches the Windows desktop-app install
+    location where the binary lives in a versioned subdirectory that may not
+    be directly on PATH.
+    """
+    hit = shutil.which("claude")
+    if hit:
+        return hit
+
+    # Claude desktop app on Windows installs to a versioned subfolder under
+    # the Packages directory.  Walk one level deep to find claude.exe.
+    base = Path(os.environ.get("LOCALAPPDATA", "")) / "Packages"
+    if base.is_dir():
+        for pkg in base.iterdir():
+            if "claude" in pkg.name.lower():
+                candidate_root = pkg / "LocalCache" / "Roaming" / "Claude" / "claude-code"
+                if candidate_root.is_dir():
+                    for sub in sorted(candidate_root.iterdir(), reverse=True):
+                        exe = sub / "claude.exe"
+                        if exe.is_file():
+                            return str(exe)
+    return None
+
+
+CLAUDE_EXE = _find_claude()
+
+
 def check_dependencies():
     """Check required tools and libraries."""
-    if shutil.which("claude") is None:
+    if CLAUDE_EXE is None:
         print("\n[X]  Claude Code is not installed or not in PATH.")
         print("     Install it from: https://claude.ai/code\n")
         sys.exit(1)
@@ -256,7 +285,7 @@ async def ask_claude_async(prompt):
             raise RuntimeError("Shutdown requested by user")
 
         proc = await asyncio.create_subprocess_exec(
-            "claude", "-p", prompt, "--output-format", "text",
+            CLAUDE_EXE, "-p", prompt, "--output-format", "text",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

@@ -104,9 +104,54 @@ All `os.path.join()` calls replaced with `pathlib.Path` operations:
 
 ---
 
+## Runtime Fixes (Post-Build)
+
+Three issues were discovered and fixed when running on a Python 3.14 system with the Claude desktop app installed.
+
+### Fix 1 — PyTorch / docling `OSError` on Python 3.13+
+
+**Problem:** PyTorch is not yet compatible with Python 3.13 or 3.14. Its DLL fails to load, raising `OSError: [WinError 1114]` instead of `ImportError`. The original `try/except ImportError` blocks did not catch this, so the script crashed at import time.
+
+**Affected blocks:**
+- `import torch` (GPU detection)
+- `import torch_directml` (DirectML fallback)
+- `from docling.document_converter import ...` (docling internally imports `transformers` → `torch`)
+
+**Fix:** All three `except ImportError` clauses updated to `except (ImportError, OSError)`. The tool now falls back to CPU / no-PDF-support cleanly on unsupported Python versions.
+
+### Fix 2 — Claude CLI not found when installed via desktop app
+
+**Problem:** The Claude desktop app installs `claude.exe` inside a versioned subdirectory:
+```
+%LOCALAPPDATA%\Packages\Claude_...\LocalCache\Roaming\Claude\claude-code\2.x.x\claude.exe
+```
+Only the parent `claude-code\` folder is on PATH, not the versioned subfolder. `shutil.which("claude")` therefore returns `None` and the script exits with "Claude Code is not installed".
+
+**Fix:** Added `_find_claude()` — a startup helper that first tries `shutil.which`, then walks one level into the versioned subdirectory under the Packages install path. The resolved path is stored in `CLAUDE_EXE` and used everywhere the CLI is invoked.
+
+### Fix 3 — Python 3.12 virtual environment
+
+**Problem:** docling and PyTorch require Python ≤ 3.12. The system had only Python 3.14.
+
+**Solution:**
+1. Installed Python 3.12 alongside 3.14 via `winget install Python.Python.3.12`
+2. Created a project-local virtual environment: `py -3.12 -m venv .venv`
+3. Installed `docling` and `colorama` into the venv
+4. Created `run.ps1` — a launcher that invokes the venv's Python automatically
+
+**`run.ps1`** (project root):
+```powershell
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+& "$scriptDir\.venv\Scripts\python.exe" "$scriptDir\hr_screening_tool_v2_win.py" @args
+```
+
+---
+
 ## How to Run on Windows
 
 ```powershell
-cd C:\path\to\Project_HR_Screening_Prototypes
-python hr_screening_tool_v2_win.py
+cd "C:\path\to\HR-Screening---v2-claude-windows"
+.\run.ps1
 ```
+
+> Do **not** use `python hr_screening_tool_v2_win.py` directly — if the system Python is 3.13 or 3.14, docling and GPU support will be silently disabled.
