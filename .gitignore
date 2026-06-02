@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+
+# Runtime / generated outputs
+screening_history_v2.json
+results/
+*.tmp
+
+# Sensitive data — candidate resumes are personal data, keep local only
+resumes/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# IDE
+.vscode/
+.idea/

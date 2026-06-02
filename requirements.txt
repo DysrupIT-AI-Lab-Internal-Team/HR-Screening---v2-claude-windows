@@ -1,0 +1,16 @@
+# HR Screening Tool v2 — Windows
+# Install with: pip install -r requirements.txt
+
+# PDF extraction (required for PDF resume support)
+docling
+
+# Windows terminal color support (optional — falls back gracefully)
+colorama
+
+# GPU acceleration — install ONE of the following based on your hardware:
+
+# NVIDIA GPU (CUDA):
+# torch
+
+# AMD / Intel GPU (DirectML):
+# torch-directml
