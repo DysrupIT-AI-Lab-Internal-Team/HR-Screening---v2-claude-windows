@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 HR Resume Screening Tool v2 (Windows-Optimized) — Powered by Claude Code Pro
-PDF extraction powered by Docling (IBM) for superior accuracy.
+PDF extraction powered by Deepseek OCR for robust text extraction.
 
 Windows Optimizations over the macOS version:
   - asyncio + IOCP for non-blocking subprocess and sleep calls
@@ -13,7 +13,7 @@ Windows Optimizations over the macOS version:
   - Graceful Ctrl+C shutdown with progress save
   - pathlib for robust Windows path handling (long-path safe)
 
-Usage: python hr_screening_tool_v2_win.py
+Usage: python hr_screening_tool_v2_deepseek_ocr.py
 """
 
 import os
@@ -71,7 +71,7 @@ def _setup_windows_console():
     # Set console title
     try:
         import ctypes
-        ctypes.windll.kernel32.SetConsoleTitleW("HR Screening Tool v2 — Windows")
+        ctypes.windll.kernel32.SetConsoleTitleW("HR Screening Tool v2 — Deepseek OCR — Windows")
     except Exception:
         pass
 
@@ -102,13 +102,13 @@ def _load_torch_with_dll_workaround():
     try:
         import ctypes
         from importlib.util import find_spec
-
+        
         spec = find_spec("torch")
         if spec and spec.origin:
             dll_path = Path(spec.origin).parent / "lib" / "c10.dll"
             if dll_path.exists():
                 ctypes.CDLL(str(dll_path.resolve()))
-
+        
         import torch
         return True
     except Exception:
@@ -125,16 +125,26 @@ if _load_torch_with_dll_workaround():
         CUDA_AVAILABLE = False
 
 PDF_SUPPORT = False
-DOCLING_SUPPORT = False
+DEEPSEEK_OCR_SUPPORT = False
+PYPDF_SUPPORT = False
 
-# Enable Docling for PDF extraction (torch DLL workaround applied above)
+# Try to enable Deepseek OCR if torch is available
+if CUDA_AVAILABLE or not CUDA_AVAILABLE:  # Always try docling if torch loaded
+    try:
+        from docling.document_converter import DocumentConverter
+        DEEPSEEK_OCR_SUPPORT = True
+        PDF_SUPPORT = True
+    except (ImportError, OSError):
+        DEEPSEEK_OCR_SUPPORT = False
+
+# Fallback: use pypdf for simple PDF text extraction (no torch required)
 try:
-    from docling.document_converter import DocumentConverter, PdfFormatOption
-    from docling.datamodel.pipeline_options import PdfPipelineOptions
-    DOCLING_SUPPORT = True
-    PDF_SUPPORT = True
+    import pypdf
+    PYPDF_SUPPORT = True
+    if not PDF_SUPPORT:
+        PDF_SUPPORT = True
 except (ImportError, OSError):
-    DOCLING_SUPPORT = False
+    PYPDF_SUPPORT = False
 
 
 # ─────────────────────────────────────────────
@@ -273,8 +283,8 @@ def check_dependencies():
         sys.exit(1)
 
     if not PDF_SUPPORT:
-        print("\n[!]  docling not installed. PDF support disabled.")
-        print("     Run: pip install docling\n")
+        print("\n[!]  deepseek-ocr or pypdf not installed. PDF support disabled.")
+        print("     Run: pip install deepseek-ocr pypdf\n")
 
 
 async def ask_claude_async(prompt):
@@ -448,53 +458,139 @@ def list_resume_files(folder):
 
 
 # ─────────────────────────────────────────────
-# PDF EXTRACTION (DOCLING) + QUALITY RATING
+# PDF EXTRACTION (DEEPSEEK OCR) + QUALITY RATING
 # ─────────────────────────────────────────────
 
-def build_converter(use_gpu=False):
+def build_ocr_engine():
     """
-    Build a Docling DocumentConverter with the appropriate device.
+    Build a Deepseek OCR engine for PDF extraction.
+    Falls back to pypdf if Deepseek OCR is unavailable.
     """
-    if not PDF_SUPPORT or not DOCLING_SUPPORT:
+    if not PDF_SUPPORT:
         return None
 
-    # Configure the PDF pipeline. The torch DLL workaround (applied at import)
-    # lets Docling's torch-based accelerators initialize cleanly on Windows.
-    opts = PdfPipelineOptions()
-    if use_gpu and CUDA_AVAILABLE:
-        opts.accelerator_options.device = "cuda"
+    if DEEPSEEK_OCR_SUPPORT:
+        try:
+            ocr = OCR()
+            return ocr
+        except Exception as e:
+            print(f"[WARNING] Deepseek OCR initialization failed: {e}")
+            print("[WARNING] Falling back to pypdf for PDF extraction")
+            # Fall through to pypdf
+    
+    # Fallback to simple pypdf-based extraction
+    if PYPDF_SUPPORT:
+        return "pypdf_fallback"
+    
+    return None
 
-    return DocumentConverter(
-        format_options={"pdf": PdfFormatOption(pipeline_options=opts)}
-    )
 
-
-def extract_pdf_text(filepath, converter):
+def extract_pdf_text_deepseek_ocr(filepath, ocr_engine):
     """
-    Extract text from a PDF using Docling.
+    Extract text from PDF using Deepseek OCR.
+    Returns (text, success).
+    """
+    if not DEEPSEEK_OCR_SUPPORT or ocr_engine is None:
+        return None, False
+    
+    try:
+        # Deepseek OCR processes PDF and returns text
+        result = ocr_engine.ocr(str(filepath), det=True, rec=True, cls=True)
+        
+        if result is None or len(result) == 0:
+            return "[Deepseek OCR returned empty result]", False
+        
+        # Format output with page markers
+        text_pages = []
+        for page_num, page_result in enumerate(result, 1):
+            if page_result is None:
+                continue
+            
+            page_text = []
+            for line in page_result:
+                # Each line is typically [boxes, (text, confidence)]
+                if isinstance(line, list) and len(line) > 0:
+                    if isinstance(line[-1], tuple) and len(line[-1]) >= 1:
+                        text = line[-1][0]
+                        if text and isinstance(text, str):
+                            page_text.append(text)
+            
+            if page_text:
+                page_content = "\n".join(page_text)
+                text_pages.append(f"--- Page {page_num} ---\n{page_content}")
+        
+        full_text = "\n".join(text_pages)
+        return full_text.strip() if full_text.strip() else "[Deepseek OCR extracted no readable text]", bool(full_text.strip())
+    
+    except Exception as e:
+        return f"[Deepseek OCR extraction failed: {e}]", False
+
+
+def extract_pdf_text_pypdf(filepath):
+    """
+    Extract text from PDF using pypdf (simple, no torch required).
+    Returns (text, success).
+    """
+    if not PYPDF_SUPPORT:
+        return None, False
+    
+    try:
+        reader = pypdf.PdfReader(filepath)
+        text_pages = []
+        for page_num, page in enumerate(reader.pages, 1):
+            text = page.extract_text()
+            if text.strip():
+                text_pages.append(f"--- Page {page_num} ---\n{text}")
+        
+        full_text = "\n".join(text_pages)
+        return full_text.strip(), True
+    except Exception as e:
+        return f"[pypdf extraction failed: {e}]", False
+
+
+def extract_pdf_text(filepath, ocr_engine):
+    """
+    Extract text from a PDF using Deepseek OCR or pypdf fallback.
     Returns (markdown_text, success).
     """
-    if not PDF_SUPPORT or converter is None:
+    if not PDF_SUPPORT:
         return None, False
-
+    
+    # Use pypdf fallback if engine is a string marker
+    if ocr_engine == "pypdf_fallback":
+        return extract_pdf_text_pypdf(filepath)
+    
+    # Use Deepseek OCR if available
+    if ocr_engine is None:
+        return None, False
+    
     try:
-        # Use os.fspath() to ensure Windows Path objects work with Docling
-        result = converter.convert(os.fspath(filepath))
-        markdown = result.document.export_to_markdown()
-        return markdown.strip(), True
+        # Try Deepseek OCR extraction
+        text, success = extract_pdf_text_deepseek_ocr(filepath, ocr_engine)
+        if success:
+            return text, True
+        
+        # Fall back to pypdf if Deepseek OCR fails or returns empty
+        if PYPDF_SUPPORT:
+            return extract_pdf_text_pypdf(filepath)
+        return text, success
+    
     except Exception as e:
+        # Try fallback pypdf extraction on deepseek failure
+        if PYPDF_SUPPORT:
+            return extract_pdf_text_pypdf(filepath)
         return f"[PDF extraction failed: {e}]", False
 
 
-def rate_pdf_quality(markdown_text):
+def rate_pdf_quality(text):
     """
-    Rate the quality of Docling's Markdown output.
+    Rate the quality of OCR output.
 
     Assesses:
       - Overall content length
-      - Presence of Markdown structure (headers, bullets, tables)
+      - Presence of readable text structure
       - Resume section coverage
-      - Proportion of image placeholders vs real content
+      - OCR accuracy indicators
 
     Returns a dict with:
       - grade: Excellent / Good / Fair / Poor
@@ -505,66 +601,50 @@ def rate_pdf_quality(markdown_text):
     """
     score = 100
     notes = []
-    text = markdown_text
+    text_content = text
 
     # 1. Content length
-    plain = re.sub(r'[#\-\|\*`>]', '', text)
-    plain = re.sub(r'<!--.*?-->', '', plain, flags=re.DOTALL)
-    plain = re.sub(r'\s+', ' ', plain).strip()
+    plain = re.sub(r'\s+', ' ', text_content).strip()
 
     if len(plain) < 100:
         score -= 60
         notes.append("Almost no content extracted -- PDF may be fully image-based or password-protected")
     elif len(plain) < 400:
         score -= 25
-        notes.append("Limited content extracted -- resume may have heavy image formatting")
+        notes.append("Limited content extracted -- resume may have heavy image formatting or OCR issues")
     elif len(plain) < 800:
         score -= 8
-        notes.append("Moderate content length -- some sections may be missing")
+        notes.append("Moderate content length -- some sections may be missing or garbled by OCR")
 
-    # 2. Markdown structure
-    headers = re.findall(r'^#{1,3} .+', text, re.MULTILINE)
-    if len(headers) == 0:
-        score -= 20
-        notes.append("No section headers detected -- document structure may be lost")
-    elif len(headers) < 3:
-        score -= 8
-        notes.append(f"Only {len(headers)} section(s) detected -- layout may be partially parsed")
-    else:
-        notes.append(f"{len(headers)} sections identified by Docling")
-
-    # 3. Resume section coverage
+    # 2. Resume section coverage
     section_keywords = [
         "experience", "skills", "education", "employment",
         "certification", "summary", "objective", "work",
     ]
-    found_sections = [kw for kw in section_keywords if kw.lower() in text.lower()]
+    found_sections = [kw for kw in section_keywords if kw.lower() in text_content.lower()]
     if len(found_sections) == 0:
         score -= 20
         notes.append("No standard resume sections found in content")
     elif len(found_sections) < 3:
         score -= 8
         notes.append(f"Few resume sections found: {', '.join(found_sections)}")
+    else:
+        notes.append(f"{len(found_sections)} resume sections identified by OCR")
 
-    # 4. Image placeholder ratio
-    image_tags = len(re.findall(r'<!-- image -->', text))
-    total_lines = max(len(text.splitlines()), 1)
-    image_ratio = image_tags / total_lines
-    if image_ratio > 0.4:
+    # 3. OCR quality indicators (garbled text detection)
+    garbled_patterns = [r'[^\w\s\.@\-\(\)\,\;\:][\^\*\#\&\%]{3,}']  # Random special char sequences
+    garbled_count = sum(len(re.findall(p, text_content)) for p in garbled_patterns)
+    if garbled_count > 10:
         score -= 15
-        notes.append(
-            f"High image content ({image_tags} image blocks) -- "
-            "resume may rely heavily on graphics"
-        )
-    elif image_tags > 0:
-        notes.append(
-            f"{image_tags} image block(s) found "
-            "(icons/graphics -- not extracted, normal for designed resumes)"
-        )
+        notes.append(f"High OCR noise detected ({garbled_count} garbled sequences) -- text quality may be poor")
+    elif garbled_count > 3:
+        score -= 5
+        notes.append(f"Some OCR noise detected ({garbled_count} sequences) -- generally readable")
 
-    # 5. Table detection
-    if '|' in text and '---' in text:
-        notes.append("Tables/grids detected and parsed -- structured content preserved")
+    # 4. Page markers (indicating successful page segmentation)
+    page_markers = len(re.findall(r'--- Page \d+ ---', text_content))
+    if page_markers > 0:
+        notes.append(f"Multi-page PDF: {page_markers} page(s) extracted and segmented")
 
     score = max(0, score)
 
@@ -586,16 +666,16 @@ def rate_pdf_quality(markdown_text):
     }
 
 
-def load_resume(filepath, converter):
+def load_resume(filepath, ocr_engine):
     """
     Load resume and return (text, quality_info).
-    PDFs -> Docling -> Markdown
+    PDFs -> Deepseek OCR -> Text
     TXT  -> plain read
     """
     ext = Path(filepath).suffix.lower()
 
     if ext == ".pdf":
-        text, success = extract_pdf_text(filepath, converter)
+        text, success = extract_pdf_text(filepath, ocr_engine)
         if not success:
             return None, None
         quality = rate_pdf_quality(text)
@@ -621,7 +701,7 @@ def load_resume(filepath, converter):
 
 async def screen_single_resume_async(
     filename, filepath, jd_text, jd_hash, jd_path,
-    converter, tracking, force
+    ocr_engine, tracking, force
 ):
     """
     Process one resume: extract -> rate quality -> ask Claude -> return result row.
@@ -656,7 +736,7 @@ async def screen_single_resume_async(
     # ── Extract resume (CPU-bound, run in executor) ──────────
     loop = asyncio.get_event_loop()
     resume_text, quality = await loop.run_in_executor(
-        None, load_resume, filepath, converter
+        None, load_resume, filepath, ocr_engine
     )
     if resume_text is None:
         print(f"  [X]  {candidate_name} -- could not read file")
@@ -811,11 +891,11 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
     workers = MAX_WORKERS if len(files) > 1 else 1
     print(f"  [*]  Device: {device_lbl}  |  Workers: {workers}  |  Resumes: {len(files)}")
 
-    # ── Build converter ───────────────────────────────────────
+    # ── Build OCR engine ──────────────────────────────────────
     if PDF_SUPPORT:
-        converter = build_converter(use_gpu=use_gpu)
+        ocr_engine = build_ocr_engine()
     else:
-        converter = None
+        ocr_engine = None
 
     # ── Load tracking ─────────────────────────────────────────
     tracking = load_tracking()
@@ -826,7 +906,7 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
             filename,
             str(folder_path / filename),
             jd_text, jd_hash, str(jd_path),
-            converter, tracking,
+            ocr_engine, tracking,
             force_all or bool(force_file),
         )
         for filename in files
@@ -1422,8 +1502,8 @@ def main():
     print("\n" + "=" * 62)
     print("   HR SCREENING TOOL v2  --  Windows Optimized")
     print("   Powered by Claude Code Pro")
-    print("   PDF extraction: Docling -- OCR + layout-aware Markdown")
-    print(f"  GPU: {_gpu_name if CUDA_AVAILABLE else 'CPU mode'}")
+    print("   PDF extraction: pypdf -- Text-based Extraction")
+    print("  GPU: CPU mode (pypdf fallback)")
     print("=" * 62)
 
     while True:
