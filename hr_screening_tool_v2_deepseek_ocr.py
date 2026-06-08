@@ -32,6 +32,14 @@ from datetime import datetime
 from pathlib import Path
 from contextlib import contextmanager
 
+# python-dotenv is optional at runtime: if it's missing we fall back to the
+# process environment so the tool still runs without a .env present.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # ─────────────────────────────────────────────
 # WINDOWS CONSOLE SETUP
 # ─────────────────────────────────────────────
@@ -157,6 +165,9 @@ JD_DIR = Path("jd")
 RESULTS_DIR = Path("results")
 SUPPORTED_RESUME_TYPES = [".pdf", ".txt"]
 SUPPORTED_JD_TYPES = [".txt", ".md"]
+
+# Claude model override from .env — blank means use Claude Code's default model.
+CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "").strip()
 
 # Use GPU when batch exceeds this size — avoids warmup overhead for small batches
 GPU_BATCH_THRESHOLD = 5
@@ -306,8 +317,11 @@ async def ask_claude_async(prompt):
         if _shutdown_requested:
             raise RuntimeError("Shutdown requested by user")
 
+        cmd = [CLAUDE_EXE, "-p", prompt, "--output-format", "text"]
+        if CLAUDE_MODEL:
+            cmd += ["--model", CLAUDE_MODEL]
         proc = await asyncio.create_subprocess_exec(
-            CLAUDE_EXE, "-p", prompt, "--output-format", "text",
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

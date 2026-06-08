@@ -1,18 +1,23 @@
 # HR Screening Tool v2 — Windows
-# Install with: uv pip install -r requirements.txt
-# (uv hardlinks from a shared global cache — no per-project duplication of large wheels)
+#
+# Dependencies are managed with uv via pyproject.toml + uv.lock (the source of truth).
+# Preferred install:   uv sync
+#
+# This file is kept only as a fallback for `uv pip install -r requirements.txt`.
+# Keep it in sync with pyproject.toml.
 
-# PDF extraction (required for PDF resume support)
-# Use the [full] extra so PyTorch is included — PDF extraction fails without it.
-docling[full]
+# PDF extraction (PyTorch is pulled in transitively — required for PDF support)
+docling
 
 # Windows terminal color support (optional — falls back gracefully)
 colorama
 
+# Loads configuration from .env
+python-dotenv
+
+# PDF text-extraction fallback used by the Deepseek OCR variant
+pypdf
+
 # GPU acceleration — install ONE of the following based on your hardware:
-
-# NVIDIA GPU (CUDA):
-# torch
-
-# AMD / Intel GPU (DirectML):
-# torch-directml
+#   NVIDIA GPU (CUDA):   uv pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   AMD / Intel GPU:     uv pip install torch-directml

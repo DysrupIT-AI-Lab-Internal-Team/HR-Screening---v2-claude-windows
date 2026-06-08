@@ -1,26 +1,50 @@
+# Secrets
+.env
+*.env
+.env.*
+!.env.example
+
 # Python
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
+.Python
 *$py.class
 
-# Virtual environment
+# uv / virtual environments
 .venv/
+venv/
+env/
 
-# Runtime / generated outputs
+# Distribution / build
+dist/
+build/
+*.egg-info/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project-specific outputs
+outputs/
+*.log
 screening_history_v2.json
 results/
 *.tmp
 
 # Sensitive data — candidate resumes are personal data, keep local only
 resumes/
-
-# macOS
-.DS_Store
-
-# Windows
-Thumbs.db
-ehthumbs.db
-
-# IDE
-.vscode/
-.idea/

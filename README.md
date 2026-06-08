@@ -56,12 +56,24 @@ separate `winget install Python.Python.3.12` needed.
 
 ### 2. Install dependencies
 
+Dependencies are declared in `pyproject.toml` and pinned in `uv.lock` (both committed).
+Install them with:
+
 ```powershell
-uv pip install "docling[full]" colorama
+uv sync
 ```
 
-uv installs into the `.venv` in the current folder automatically. Use `docling[full]`
-(not plain `docling`) so PyTorch is included — PDF extraction fails without it.
+`uv sync` installs the exact locked versions into the `.venv`. PyTorch is pulled in as a
+transitive dependency of `docling`, so PDF extraction works out of the box.
+
+### 3. Configure the environment
+
+```powershell
+copy .env.example .env
+```
+
+Edit `.env` if you want to pin a specific Claude model (see [Configuration](#configuration)).
+Leaving `CLAUDE_MODEL` blank uses Claude Code's default model.
 
 ### GPU support (optional)
 
@@ -79,13 +91,34 @@ GPU is auto-enabled when batch size exceeds 5 resumes. Falls back to CPU otherwi
 
 ---
 
+## Configuration
+
+Configuration lives in a `.env` file (loaded automatically via `python-dotenv`). Copy
+`.env.example` to `.env` and adjust as needed. `.env` is git-ignored and must never be
+committed.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CLAUDE_MODEL` | *(blank)* | Claude model to use. Blank = Claude Code's default model. Set to a model name (e.g. `claude-sonnet-4-6`) to override. |
+
+## Models used
+
+| Purpose | Model | Notes |
+|---------|-------|-------|
+| Screening & generation | **Claude Code** (default model unless `CLAUDE_MODEL` is set) | No API key required; runs via the Claude Code CLI. |
+| PDF extraction (`hr_screening_tool_v2_win.py`) | **Docling** (IBM) | Layout-aware Markdown extraction with bundled PyTorch models. |
+| PDF extraction (`hr_screening_tool_v2_deepseek_ocr.py`) | **Deepseek OCR** via Docling, with **pypdf** fallback | OCR-based variant for image-heavy/scanned PDFs. |
+
 ## Folder structure
 
 ```
 project/
 ├── hr_screening_tool_v2_win.py
 ├── run.ps1                     ← use this to launch the tool
-├── requirements.txt
+├── pyproject.toml              ← dependency declarations (uv)
+├── uv.lock                     ← pinned dependency versions
+├── .env.example                ← config template (committed)
+├── .env                        ← local config (never committed)
 ├── .venv/                      ← Python 3.12 virtual environment
 ├── screening_history_v2.json   ← auto-created on first run
 ├── resumes/
