@@ -1,0 +1,20 @@
+[project]
+name = "hr-screening-tool-v2"
+version = "2.0.0"
+description = "AI-powered resume screening CLI for Windows, backed by Claude Code and Docling/Deepseek OCR PDF extraction."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "docling",
+    "colorama",
+    "python-dotenv",
+    "pypdf",
+]
+
+[project.optional-dependencies]
+# GPU acceleration — install ONE of these based on your hardware (see README).
+cuda = ["torch"]
+directml = ["torch-directml"]
+
+[tool.black]
+line-length = 88

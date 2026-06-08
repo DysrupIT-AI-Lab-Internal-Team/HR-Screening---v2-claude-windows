@@ -93,17 +93,15 @@ Expected output: `Python 3.12.x`
 
 ## Step 5 — Install dependencies
 
+Dependencies are declared in `pyproject.toml` and pinned in `uv.lock`. Install them with:
+
 ```powershell
-uv pip install "docling[full]" colorama
+uv sync
 ```
 
-uv installs into the `.venv` in the current folder automatically (no need to activate it).
-
-> **Use `docling[full]`, not plain `docling`.** The plain package is a *slim* build
-> that does **not** include PyTorch. Without torch, docling's OCR / layout pipeline
-> cannot even import, and PDF processing will fail (there is no pypdf fallback).
-> The `[full]` extra pulls in `torch` + `torchvision`, which is what the tool's
-> Windows DLL workaround loads at startup.
+`uv sync` installs the exact locked versions into the `.venv` from Step 4
+(`docling`, `colorama`, `python-dotenv`, `pypdf`). PyTorch is pulled in automatically as a
+transitive dependency of `docling`, so docling's OCR / layout pipeline works out of the box.
 
 The **first** time you do this, uv downloads PyTorch (~120 MB wheel), Transformers, and
 several ML libraries into its global cache. On any later venv — this project or another —
@@ -135,8 +133,8 @@ Run these checks one at a time. Each should print `OK` with no errors.
 .\.venv\Scripts\python.exe -c "import torch; from docling.document_converter import DocumentConverter; print('docling + torch OK -', torch.__version__)"
 ```
 
-If this raises `ModuleNotFoundError: No module named 'torch'`, you installed the slim
-package. Re-run Step 5 with `docling[full]`.
+If this raises `ModuleNotFoundError: No module named 'torch'`, the sync didn't complete.
+Re-run Step 5 (`uv sync`).
 
 ### Check Claude CLI is detected
 ```powershell
@@ -209,7 +207,21 @@ New-Item -ItemType Directory -Force resumes, jd, results
 
 ---
 
-## Step 9 — Run the tool
+## Step 9 — Configure the environment
+
+Copy the example config to a local `.env` file:
+
+```powershell
+copy .env.example .env
+```
+
+`.env` is git-ignored and holds local configuration. The only setting today is
+`CLAUDE_MODEL` — leave it blank to use Claude Code's default model, or set a specific
+model name (e.g. `claude-sonnet-4-6`) to override.
+
+---
+
+## Step 10 — Run the tool
 
 ```powershell
 .\run.ps1
@@ -234,12 +246,12 @@ You should see the main menu:
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `docling not installed` / PDF support disabled | Slim docling installed without torch, **or** running system Python instead of venv | Re-run Step 5 with `docling[full]`; launch via `.\run.ps1`, not `python hr_screening_tool_v2_win.py` |
-| `ModuleNotFoundError: No module named 'torch'` | Installed plain `docling` (slim) instead of `docling[full]` | `uv pip install "docling[full]"` |
+| `docling not installed` / PDF support disabled | Dependencies not synced, **or** running system Python instead of venv | Re-run Step 5 (`uv sync`); launch via `.\run.ps1`, not `python hr_screening_tool_v2_win.py` |
+| `ModuleNotFoundError: No module named 'torch'` | `uv sync` did not complete | Re-run `uv sync` from the project root |
 | First resume hangs / `connection` errors during processing | OCR/layout models downloading on first run | Run Step 7 while online; needs internet on first use |
 | `OSError: [WinError 1114] c10.dll` | Missing Visual C++ 2022 runtime | Re-run Step 2 |
 | `Claude Code is not installed or not in PATH` | Claude desktop app not installed | Install from https://claude.ai/code |
 | `uv` not recognized | uv not installed or PATH stale | `winget install astral-sh.uv`, then re-open PowerShell |
-| `uv pip install` fails to find a venv | `.venv` not created yet, or not in project folder | Run Step 5 first; run uv commands from the project root |
+| `uv sync` fails to find / create a venv | Not in the project folder, or Python 3.12 unavailable | Run uv commands from the project root; uv auto-downloads Python 3.12 |
 | First install is slow / downloads a lot | Cold uv cache (first machine ever) | One-time — later venvs hardlink from the cache instantly |
 | `GPU: None (CPU mode)` on startup | No CUDA/DirectML torch installed | Normal if no GPU — tool works fine on CPU |
