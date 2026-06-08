@@ -133,10 +133,10 @@ Only the parent `claude-code\` folder is on PATH, not the versioned subfolder. `
 
 **Problem:** docling and PyTorch require Python ≤ 3.12. The system had only Python 3.14.
 
-**Solution:**
-1. Installed Python 3.12 alongside 3.14 via `winget install Python.Python.3.12`
-2. Created a project-local virtual environment: `py -3.12 -m venv .venv`
-3. Installed `docling` and `colorama` into the venv
+**Solution (using uv):**
+1. Installed uv via `winget install astral-sh.uv` (shared global cache, hardlinks wheels into venvs)
+2. Created a project-local virtual environment: `uv venv --python 3.12 .venv` (uv fetches Python 3.12 if absent)
+3. Installed `docling[full]` and `colorama` into the venv: `uv pip install "docling[full]" colorama`
 4. Created `run.ps1` — a launcher that invokes the venv's Python automatically
 
 **`run.ps1`** (project root):

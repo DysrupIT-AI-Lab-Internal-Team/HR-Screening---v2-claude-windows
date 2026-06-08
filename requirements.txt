@@ -1,8 +1,10 @@
 # HR Screening Tool v2 — Windows
-# Install with: pip install -r requirements.txt
+# Install with: uv pip install -r requirements.txt
+# (uv hardlinks from a shared global cache — no per-project duplication of large wheels)
 
 # PDF extraction (required for PDF resume support)
-docling
+# Use the [full] extra so PyTorch is included — PDF extraction fails without it.
+docling[full]
 
 # Windows terminal color support (optional — falls back gracefully)
 colorama

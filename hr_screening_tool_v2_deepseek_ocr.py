@@ -284,7 +284,7 @@ def check_dependencies():
 
     if not PDF_SUPPORT:
         print("\n[!]  deepseek-ocr or pypdf not installed. PDF support disabled.")
-        print("     Run: pip install deepseek-ocr pypdf\n")
+        print("     Run: uv pip install deepseek-ocr pypdf\n")
 
 
 async def ask_claude_async(prompt):

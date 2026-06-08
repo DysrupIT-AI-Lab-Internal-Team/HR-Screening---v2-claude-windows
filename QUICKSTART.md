@@ -6,16 +6,26 @@ Get the HR Screening Tool running on a fresh Windows machine from scratch.
 
 ## Step 1 — Check prerequisites
 
-Open **PowerShell** and run each check below.
-
-### Python version
-
+Open **Windows PowerShell** Ensure that you are in 
 ```powershell
-py --list
+PS C:\Users\<your PC name>\Documents>
 ```
 
-You need **Python 3.12** in the list. If you only see 3.13 or 3.14 (or nothing), go to Step 2.  
-If 3.12 is already listed, skip to Step 3.
+and run each check below.
+
+### uv (Python package manager)
+
+```powershell
+uv --version
+```
+
+Should print a version (e.g. `uv 0.11.x`). If you get "not recognized", install it:
+
+```powershell
+winget install astral-sh.uv --accept-package-agreements --accept-source-agreements
+```
+
+Close and re-open PowerShell after installing.
 
 ### Claude Code
 
@@ -37,25 +47,7 @@ If missing, update the **App Installer** package from the Microsoft Store.
 
 ---
 
-## Step 2 — Install Python 3.12
-
-> Skip this step if `py --list` already shows `-V:3.12`.
-
-```powershell
-winget install Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-```
-
-Close and re-open PowerShell after installation, then confirm:
-
-```powershell
-py --list
-```
-
-You should now see `-V:3.12` in the list.
-
----
-
-## Step 3 — Install Visual C++ 2022 Redistributable
+## Step 2 — Install Visual C++ 2022 Redistributable
 
 PyTorch (required by docling) needs the **2022** runtime. The 2019 version that ships with many machines is not sufficient.
 
@@ -67,20 +59,27 @@ winget install Microsoft.VCRedist.2015+.x64 --accept-package-agreements --accept
 
 ---
 
-## Step 4 — Clone the repository
+## Step 3 — Clone the repository
 
 ```powershell
-git clone <repo-url>
+git clone https://github.com/DysrupIT-AI-Lab-Internal-Team/HR-Screening---v2-claude-windows.git
 cd HR-Screening---v2-claude-windows
 ```
 
 ---
 
-## Step 5 — Create the Python 3.12 virtual environment
+## Step 4 — Create the Python 3.12 virtual environment
 
 ```powershell
-py -3.12 -m venv .venv
+uv venv --python 3.12 .venv
 ```
+then activate it using 
+```
+.venv\Scripts\activate
+```
+
+If Python 3.12 isn't installed on the machine, uv downloads a standalone build
+automatically — no winget/python.org install needed.
 
 Verify it was created with the correct Python version:
 
@@ -92,14 +91,24 @@ Expected output: `Python 3.12.x`
 
 ---
 
-## Step 6 — Install dependencies
+## Step 5 — Install dependencies
 
 ```powershell
-.\.venv\Scripts\pip install docling colorama
+uv pip install "docling[full]" colorama
 ```
 
-This will take **3–5 minutes** — docling pulls in PyTorch, Transformers, and several ML libraries.  
-You will see a long list of packages being downloaded. This is normal.
+uv installs into the `.venv` in the current folder automatically (no need to activate it).
+
+> **Use `docling[full]`, not plain `docling`.** The plain package is a *slim* build
+> that does **not** include PyTorch. Without torch, docling's OCR / layout pipeline
+> cannot even import, and PDF processing will fail (there is no pypdf fallback).
+> The `[full]` extra pulls in `torch` + `torchvision`, which is what the tool's
+> Windows DLL workaround loads at startup.
+
+The **first** time you do this, uv downloads PyTorch (~120 MB wheel), Transformers, and
+several ML libraries into its global cache. On any later venv — this project or another —
+uv hardlinks the same cached wheels instead of re-downloading or re-copying them, so it's
+near-instant and uses no extra disk space.
 
 ### Optional: GPU support
 
@@ -107,24 +116,27 @@ Skip this if you don't have a dedicated GPU (CPU mode works fine for most worklo
 
 **NVIDIA GPU (CUDA):**
 ```powershell
-.\.venv\Scripts\pip install torch --index-url https://download.pytorch.org/whl/cu121
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
 **AMD / Intel GPU (DirectML):**
 ```powershell
-.\.venv\Scripts\pip install torch-directml
+uv pip install torch-directml
 ```
 
 ---
 
-## Step 7 — Verify the installation
+## Step 6 — Verify the installation
 
 Run these checks one at a time. Each should print `OK` with no errors.
 
-### Check docling (PDF support)
+### Check docling + torch (PDF support)
 ```powershell
-.\.venv\Scripts\python.exe -c "from docling.document_converter import DocumentConverter; print('docling OK')"
+.\.venv\Scripts\python.exe -c "import torch; from docling.document_converter import DocumentConverter; print('docling + torch OK -', torch.__version__)"
 ```
+
+If this raises `ModuleNotFoundError: No module named 'torch'`, you installed the slim
+package. Re-run Step 5 with `docling[full]`.
 
 ### Check Claude CLI is detected
 ```powershell
@@ -161,6 +173,27 @@ except Exception as e:
 
 ---
 
+## Step 7 — Pre-download the OCR / layout models (recommended)
+
+On the **first** PDF it processes, docling downloads its ML model weights from the
+internet — the RapidOCR detection/classification/recognition models (~40 MB from
+modelscope.cn) plus docling's layout and table-structure models (from Hugging Face).
+This happens automatically, but it means the *first* resume is slow and **requires an
+internet connection**.
+
+To get this out of the way now (and confirm processing will work), pre-fetch the
+models with docling's downloader:
+
+```powershell
+.\.venv\Scripts\docling-tools.exe models download
+```
+
+> The models are cached under your user profile, so this only needs to run once per
+> machine. If the machine that runs screenings has no internet access, run this step
+> on it while it is still online — processing itself works offline once models are cached.
+
+---
+
 ## Step 8 — Set up folders
 
 Create the required input folders if they don't exist:
@@ -188,7 +221,7 @@ You should see the main menu:
 ==============================================================
    HR SCREENING TOOL v2  --  Windows Optimized
    Powered by Claude Code Pro
-   PDF extraction: Docling (IBM) -- High-accuracy Markdown
+   PDF extraction: Docling -- OCR + layout-aware Markdown
 ==============================================================
 
   Main Menu
@@ -201,9 +234,12 @@ You should see the main menu:
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `docling not installed` warning on startup | Running with system Python instead of venv | Use `.\run.ps1`, not `python hr_screening_tool_v2_win.py` |
-| `OSError: [WinError 1114] c10.dll` | Missing Visual C++ 2022 runtime | Re-run Step 3 |
+| `docling not installed` / PDF support disabled | Slim docling installed without torch, **or** running system Python instead of venv | Re-run Step 5 with `docling[full]`; launch via `.\run.ps1`, not `python hr_screening_tool_v2_win.py` |
+| `ModuleNotFoundError: No module named 'torch'` | Installed plain `docling` (slim) instead of `docling[full]` | `uv pip install "docling[full]"` |
+| First resume hangs / `connection` errors during processing | OCR/layout models downloading on first run | Run Step 7 while online; needs internet on first use |
+| `OSError: [WinError 1114] c10.dll` | Missing Visual C++ 2022 runtime | Re-run Step 2 |
 | `Claude Code is not installed or not in PATH` | Claude desktop app not installed | Install from https://claude.ai/code |
-| `py --list` does not show 3.12 after install | PowerShell session is stale | Close and re-open PowerShell |
-| pip install hangs for a long time | Large ML model downloads | Wait — PyTorch alone is ~2 GB |
+| `uv` not recognized | uv not installed or PATH stale | `winget install astral-sh.uv`, then re-open PowerShell |
+| `uv pip install` fails to find a venv | `.venv` not created yet, or not in project folder | Run Step 5 first; run uv commands from the project root |
+| First install is slow / downloads a lot | Cold uv cache (first machine ever) | One-time — later venvs hardlink from the cache instantly |
 | `GPU: None (CPU mode)` on startup | No CUDA/DirectML torch installed | Normal if no GPU — tool works fine on CPU |

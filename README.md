@@ -27,7 +27,8 @@ An AI-powered resume screening tool built for Windows, using Claude Code Pro as 
 ## Requirements
 
 - Windows 10 / 11
-- **Python 3.12** (required — docling and PyTorch are not yet compatible with Python 3.13/3.14)
+- **Python 3.12** (required — docling and PyTorch are not yet compatible with Python 3.13/3.14). `uv` can install this for you.
+- [uv](https://docs.astral.sh/uv/) package manager — `winget install astral-sh.uv`
 - [Claude Code](https://claude.ai/code) desktop app installed
 
 ---
@@ -39,36 +40,39 @@ git clone <repo-url>
 cd HR-Screening---v2-claude-windows
 ```
 
-### 1. Install Python 3.12
+> This project uses **uv** instead of pip. uv keeps a single global wheel cache and
+> hardlinks packages into each venv, so the large PyTorch wheels are downloaded once and
+> never duplicated per project. Install uv with `winget install astral-sh.uv` if you
+> don't have it.
 
-If you only have Python 3.13 or 3.14, install 3.12 alongside it via winget:
-
-```powershell
-winget install Python.Python.3.12
-```
-
-### 2. Create the virtual environment
+### 1. Create the virtual environment
 
 ```powershell
-py -3.12 -m venv .venv
+uv venv --python 3.12 .venv
 ```
 
-### 3. Install dependencies
+uv downloads a standalone Python 3.12 automatically if one isn't already installed — no
+separate `winget install Python.Python.3.12` needed.
+
+### 2. Install dependencies
 
 ```powershell
-.\.venv\Scripts\pip install docling colorama
+uv pip install "docling[full]" colorama
 ```
+
+uv installs into the `.venv` in the current folder automatically. Use `docling[full]`
+(not plain `docling`) so PyTorch is included — PDF extraction fails without it.
 
 ### GPU support (optional)
 
-For NVIDIA GPUs (CUDA) — install inside the venv:
+For NVIDIA GPUs (CUDA):
 ```powershell
-.\.venv\Scripts\pip install torch
+uv pip install torch --index-url https://download.pytorch.org/whl/cu121
 ```
 
 For AMD / Intel GPUs (DirectML):
 ```powershell
-.\.venv\Scripts\pip install torch-directml
+uv pip install torch-directml
 ```
 
 GPU is auto-enabled when batch size exceeds 5 resumes. Falls back to CPU otherwise.

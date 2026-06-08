@@ -4,8 +4,8 @@ $venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
 
 if (-not (Test-Path $venvPython)) {
     Write-Host "[X] Virtual environment not found. Run setup first:"
-    Write-Host "    py -3.12 -m venv .venv"
-    Write-Host "    .\.venv\Scripts\pip install docling colorama"
+    Write-Host "    uv venv --python 3.12 .venv"
+    Write-Host "    uv pip install `"docling[full]`" colorama"
     exit 1
 }
 

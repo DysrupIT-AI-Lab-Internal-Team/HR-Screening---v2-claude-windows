@@ -274,7 +274,7 @@ def check_dependencies():
 
     if not PDF_SUPPORT:
         print("\n[!]  docling not installed. PDF support disabled.")
-        print("     Run: pip install docling\n")
+        print("     Run: uv pip install \"docling[full]\"\n")
 
 
 async def ask_claude_async(prompt):
@@ -1295,7 +1295,6 @@ def delete_resumes():
         _delete_specific_resume()
     else:
         print("  [!]  Invalid choice.\n")
-
 
 def _delete_all_resumes():
     """Delete every resume file under RESUMES_DIR."""

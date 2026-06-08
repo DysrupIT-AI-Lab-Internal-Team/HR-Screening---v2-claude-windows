@@ -8,10 +8,11 @@ Press Win + X → Terminal (or search "PowerShell").
 powershell
 npm install -g @anthropic-ai/claude-code
 claude login
-3. Install Python dependencies
+3. Install Python dependencies (with uv)
 powershell
-pip install docling
-Skip this if you only have .txt resumes. torch is optional (only for GPU acceleration).
+uv venv --python 3.12 .venv
+uv pip install "docling[full]" colorama
+Skip this if you only have .txt resumes. (uv installs uv with `winget install astral-sh.uv`; it caches and hardlinks the large wheels so they aren't duplicated per project.)
 
 4. Set up your folder structure
 Based on your current setup, your HR-Screening Windows folder should look like:
