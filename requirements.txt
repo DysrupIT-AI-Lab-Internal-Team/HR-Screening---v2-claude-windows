@@ -9,6 +9,12 @@
 # PDF extraction (PyTorch is pulled in transitively — required for PDF support)
 docling
 
+# transformers 5.x is incompatible with the Windows-stable torch 2.4.1 build
+# (docling fails to import). Pin to 4.x and pin torch to the known-good version.
+transformers>=4.42,<5
+torch==2.4.1
+torchvision==0.19.1
+
 # Windows terminal color support (optional — falls back gracefully)
 colorama
 

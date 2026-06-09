@@ -6,6 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "docling",
+    # transformers 5.x ships a torch.library.custom_op that the Windows-stable
+    # torch 2.4.1 build cannot parse (infer_schema ValueError on docling import).
+    # Pin to 4.x — docling accepts >=4.42 — until torch is upgraded in tandem.
+    "transformers>=4.42,<5",
+    "torch==2.4.1",
+    "torchvision==0.19.1",
     "colorama",
     "python-dotenv",
     "pypdf",

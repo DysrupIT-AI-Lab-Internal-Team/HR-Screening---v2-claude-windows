@@ -76,6 +76,17 @@ Write-Step 2 "Installing dependencies (uv sync)"
 uv sync
 Write-Ok "Dependencies synced into .venv"
 
+# Smoke-check that docling actually imports. transformers/torch version drift
+# can break this even after a clean sync, so fail clearly here rather than
+# dropping the user into a raw traceback at launch.
+& $venvPython -c "from docling.document_converter import DocumentConverter" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Err "docling failed to import after sync (likely a torch/transformers mismatch)."
+    Write-Err "Try:  uv sync --reinstall   then re-run this script."
+    exit 1
+}
+Write-Ok "docling import verified (PDF support active)."
+
 # --- 3. Configuration (.env) ---
 Write-Step 3 "Setting up .env"
 $envFile = Join-Path $scriptDir ".env"
