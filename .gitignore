@@ -43,8 +43,9 @@ desktop.ini
 outputs/
 *.log
 screening_history_v2.json
-results/
+
 *.tmp
 
 # Sensitive data — candidate resumes are personal data, keep local only
-resumes/
+
+
