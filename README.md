@@ -16,7 +16,6 @@ An AI-powered resume screening tool built for Windows, using Claude Code Pro as 
 ### Windows-specific optimizations
 
 - `asyncio` + IOCP for non-blocking subprocess I/O
-- CUDA / DirectML GPU support for Docling (auto-selected based on batch size)
 - `msvcrt` file locking for safe concurrent tracking-file writes
 - Atomic tracking-file saves (write-to-temp + rename)
 - Windows process priority elevation during batch processing
@@ -40,21 +39,13 @@ git clone <repo-url>
 cd HR-Screening---v2-claude-windows
 ```
 
-> This project uses **uv** instead of pip. uv keeps a single global wheel cache and
-> hardlinks packages into each venv, so the large PyTorch wheels are downloaded once and
-> never duplicated per project. Install uv with `winget install astral-sh.uv` if you
-> don't have it.
+> This project uses **uv** instead of pip. You never create or activate a virtual
+> environment by hand and never call `pip` — uv manages the environment, and `uv run`
+> executes the tool inside it. uv keeps a single global wheel cache and hardlinks packages
+> into each environment, so the large PyTorch wheels are downloaded once and never
+> duplicated per project. Install uv with `winget install astral-sh.uv` if you don't have it.
 
-### 1. Create the virtual environment
-
-```powershell
-uv venv --python 3.12 .venv
-```
-
-uv downloads a standalone Python 3.12 automatically if one isn't already installed — no
-separate `winget install Python.Python.3.12` needed.
-
-### 2. Install dependencies
+### 1. Install dependencies
 
 Dependencies are declared in `pyproject.toml` and pinned in `uv.lock` (both committed).
 Install them with:
@@ -63,10 +54,12 @@ Install them with:
 uv sync
 ```
 
-`uv sync` installs the exact locked versions into the `.venv`. PyTorch is pulled in as a
-transitive dependency of `docling`, so PDF extraction works out of the box.
+`uv sync` creates a Python 3.12 environment automatically (downloading a standalone
+Python 3.12 build if one isn't already installed — no separate `winget install
+Python.Python.3.12` needed) and installs the exact locked versions. PyTorch is pulled in as
+a transitive dependency of `docling`, so PDF extraction works out of the box.
 
-### 3. Configure the environment
+### 2. Configure the environment
 
 ```powershell
 copy .env.example .env
@@ -75,19 +68,7 @@ copy .env.example .env
 Edit `.env` if you want to pin a specific Claude model (see [Configuration](#configuration)).
 Leaving `CLAUDE_MODEL` blank uses Claude Code's default model.
 
-### GPU support (optional)
-
-For NVIDIA GPUs (CUDA):
-```powershell
-uv pip install torch --index-url https://download.pytorch.org/whl/cu121
-```
-
-For AMD / Intel GPUs (DirectML):
-```powershell
-uv pip install torch-directml
-```
-
-GPU is auto-enabled when batch size exceeds 5 resumes. Falls back to CPU otherwise.
+> PDF extraction runs on CPU — no GPU setup is required.
 
 ---
 
@@ -107,7 +88,6 @@ committed.
 |---------|-------|-------|
 | Screening & generation | **Claude Code** (default model unless `CLAUDE_MODEL` is set) | No API key required; runs via the Claude Code CLI. |
 | PDF extraction (`hr_screening_tool_v2_win.py`) | **Docling** (IBM) | Layout-aware Markdown extraction with bundled PyTorch models. |
-| PDF extraction (`hr_screening_tool_v2_deepseek_ocr.py`) | **Deepseek OCR** via Docling, with **pypdf** fallback | OCR-based variant for image-heavy/scanned PDFs. |
 
 ## Folder structure
 
@@ -143,7 +123,10 @@ Place job description files (`.txt` or `.md`) inside `jd/`.
 .\run.ps1
 ```
 
-`run.ps1` activates the `.venv` Python 3.12 environment automatically. Do not run with plain `python` — that would use the system Python and docling will fail on Python 3.13+.
+`run.ps1` launches the tool via `uv run`, which syncs the Python 3.12 environment from
+`uv.lock` and runs inside it automatically — no activation needed. You can also run it
+directly with `uv run hr_screening_tool_v2_win.py`. Do not run with plain `python` — that
+would use the system Python and docling will fail on Python 3.13+.
 
 ### Main menu options
 
@@ -207,4 +190,4 @@ Adjust constants at the top of `hr_screening_tool_v2_win.py` if you have a Max s
 - The tracking file (`screening_history_v2.json`) stores hashes of both the resume and JD — re-screening is triggered automatically if either file changes.
 - PDF resumes with heavy image formatting or scanned pages will receive a lower PDF quality score. The tool flags these and still attempts analysis, but results may be less accurate.
 - The Claude CLI is located automatically even when installed via the Claude desktop app (where the executable lives in a versioned subdirectory not directly on PATH).
-- Running with plain `python` on Python 3.13+ will disable PDF support and GPU detection silently — always use `.\run.ps1`.
+- Running with plain `python` on Python 3.13+ will disable PDF support silently — always use `.\run.ps1` or `uv run hr_screening_tool_v2_win.py`.

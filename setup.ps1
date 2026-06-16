@@ -9,22 +9,19 @@
 #   6. Launch the tool
 #
 # Usage:
-#   .\setup.ps1                 # set up, then run the Docling tool
-#   .\setup.ps1 -Deepseek       # set up, then run the Deepseek OCR variant
+#   .\setup.ps1                 # set up, then run the tool
 #   .\setup.ps1 -DownloadModels # also pre-fetch docling models (needs internet)
 #   .\setup.ps1 -SetupOnly      # set up only, do not launch the tool
 
 [CmdletBinding()]
 param(
-    [switch]$Deepseek,
     [switch]$DownloadModels,
     [switch]$SetupOnly
 )
 
 $ErrorActionPreference = "Stop"
 
-$scriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
-$venvPython = Join-Path $scriptDir ".venv\Scripts\python.exe"
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
 function Write-Step($n, $msg) { Write-Host "`n[$n] $msg" -ForegroundColor Cyan }
@@ -73,13 +70,17 @@ if ($claude) {
 
 # --- 2. Dependencies ---
 Write-Step 2 "Installing dependencies (uv sync)"
-uv sync
-Write-Ok "Dependencies synced into .venv"
+uv sync --project $scriptDir
+if ($LASTEXITCODE -ne 0) {
+    Write-Err "uv sync failed. Resolve the error shown above, then re-run this script."
+    exit 1
+}
+Write-Ok "Dependencies synced into the uv environment."
 
 # Smoke-check that docling actually imports. transformers/torch version drift
 # can break this even after a clean sync, so fail clearly here rather than
 # dropping the user into a raw traceback at launch.
-& $venvPython -c "from docling.document_converter import DocumentConverter" 2>$null
+uv run --project $scriptDir python -c "from docling.document_converter import DocumentConverter" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Err "docling failed to import after sync (likely a torch/transformers mismatch)."
     Write-Err "Try:  uv sync --reinstall   then re-run this script."
@@ -111,12 +112,11 @@ Write-Ok "resumes\, jd\, results\ ready."
 # --- 5. Pre-download docling models (optional) ---
 if ($DownloadModels) {
     Write-Step 5 "Pre-downloading docling OCR / layout models"
-    $doclingTools = Join-Path $scriptDir ".venv\Scripts\docling-tools.exe"
-    if (Test-Path $doclingTools) {
-        & $doclingTools models download
-        Write-Ok "Models cached."
+    uv run --project $scriptDir docling-tools models download
+    if ($LASTEXITCODE -ne 0) {
+        Write-Warn "Model pre-download failed - retry later with: uv run docling-tools models download"
     } else {
-        Write-Warn "docling-tools.exe not found - skipping model pre-download."
+        Write-Ok "Models cached."
     }
 }
 
@@ -126,15 +126,5 @@ if ($SetupOnly) {
     exit 0
 }
 
-if (-not (Test-Path $venvPython)) {
-    Write-Err "Virtual environment Python not found at $venvPython. Setup may have failed."
-    exit 1
-}
-
-if ($Deepseek) {
-    Write-Step 6 "Launching HR Screening Tool (Deepseek OCR variant)"
-    & $venvPython (Join-Path $scriptDir "hr_screening_tool_v2_deepseek_ocr.py")
-} else {
-    Write-Step 6 "Launching HR Screening Tool (Docling)"
-    & $venvPython (Join-Path $scriptDir "hr_screening_tool_v2_win.py")
-}
+Write-Step 6 "Launching HR Screening Tool (Docling)"
+uv run --project $scriptDir (Join-Path $scriptDir "hr_screening_tool_v2_win.py")

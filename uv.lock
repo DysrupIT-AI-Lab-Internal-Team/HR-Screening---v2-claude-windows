@@ -389,34 +389,21 @@ source = { virtual = "." }
 dependencies = [
     { name = "colorama" },
     { name = "docling" },
-    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "transformers" },
 ]
 
-[package.optional-dependencies]
-cuda = [
-    { name = "torch" },
-]
-directml = [
-    { name = "torch-directml" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "colorama" },
     { name = "docling" },
-    { name = "pypdf" },
     { name = "python-dotenv" },
     { name = "torch", specifier = "==2.4.1" },
-    { name = "torch", marker = "extra == 'cuda'" },
-    { name = "torch-directml", marker = "extra == 'directml'" },
     { name = "torchvision", specifier = "==0.19.1" },
     { name = "transformers", specifier = ">=4.42,<5" },
 ]
-provides-extras = ["cuda", "directml"]
 
 [[package]]
 name = "httpcore"
@@ -1024,15 +1011,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/5d/ab/34ec41718af73c00119d0351b7a2531d2ebddb51833a36448fc7b862be60/pylatexenc-2.10.tar.gz", hash = "sha256:3dd8fd84eb46dc30bee1e23eaab8d8fb5a7f507347b23e5f38ad9675c84f40d3", size = 162597, upload-time = "2021-04-06T07:56:07.854Z" }
 
 [[package]]
-name = "pypdf"
-version = "6.13.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/70/79/9fd087fbff8300e5c2a9b2bd0200b75c6ef8c1f9a7a2cfe3df0659aa4025/pypdf-6.13.0.tar.gz", hash = "sha256:558683ec9daf6b91c280c322c84c32f5cc216afd3eaa3a37de5ae88ae0c3b787", size = 6476995, upload-time = "2026-06-05T10:12:05.568Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/70/16942ec95d32187d8679ce8419cee2d5c0dbe90fa3ac1b307daea4c86da9/pypdf-6.13.0-py3-none-any.whl", hash = "sha256:de1294ae49d6956edb4e5c41527fb9e8716ddd2b120f2185c68aab784d4ffe60", size = 345958, upload-time = "2026-06-05T10:12:03.453Z" },
-]
-
-[[package]]
 name = "pypdfium2"
 version = "5.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1459,19 +1437,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4f/16/d23a689e5ef8001ed2ace1a3a59f2fda842889b0c3f3877799089925282a/torch-2.4.1-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:18835374f599207a9e82c262153c20ddf42ea49bc76b6eadad8e5f49729f6e4d", size = 89613802, upload-time = "2024-09-04T19:13:19.273Z" },
     { url = "https://files.pythonhosted.org/packages/a8/e0/ca8354dfb8d834a76da51b06e8248b70fc182bc163540507919124974bdf/torch-2.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:ebea70ff30544fc021d441ce6b219a88b67524f01170b1c538d7d3ebb5e7f56c", size = 199387694, upload-time = "2024-09-04T19:13:06.167Z" },
     { url = "https://files.pythonhosted.org/packages/ac/30/8b6f77ea4ce84f015ee024b8dfef0dac289396254e8bfd493906d4cbb848/torch-2.4.1-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:72b484d5b6cec1a735bf3fa5a1c4883d01748698c5e9cfdbeb4ffab7c7987e0d", size = 62123443, upload-time = "2024-09-04T19:12:59.242Z" },
-]
-
-[[package]]
-name = "torch-directml"
-version = "0.2.5.dev240914"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "torch" },
-    { name = "torchvision" },
-]
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/e1/636e6bc0fbf7bf13a2a206f7b47ecce381335c90c0a761bac243db6c2a37/torch_directml-0.2.5.dev240914-cp312-cp312-manylinux2010_x86_64.whl", hash = "sha256:26915aff5008a8567ea7641b74cf8cb53c1767d0c7163fc06e0a587e7c1c9dce", size = 24949394, upload-time = "2024-09-15T13:21:10.988Z" },
-    { url = "https://files.pythonhosted.org/packages/71/f2/eb7d3c601310c758f6aef891773e4a00f7388eeb613d536c0d2681fcb105/torch_directml-0.2.5.dev240914-cp312-cp312-win_amd64.whl", hash = "sha256:ea19d11e33e9450b290311c06f7eb10924dd25c555e504d367b7b437d3eb24d0", size = 8956338, upload-time = "2024-09-15T13:21:13.901Z" },
 ]
 
 [[package]]
