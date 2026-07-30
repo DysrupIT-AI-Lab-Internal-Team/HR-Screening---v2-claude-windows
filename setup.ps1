@@ -4,7 +4,7 @@
 #   1. Check prerequisites (uv, Claude Code)
 #   2. Sync dependencies from pyproject.toml / uv.lock  (creates the .venv)
 #   3. Create the local .env from .env.example
-#   4. Create the resumes\ jd\ results\ input folders
+#   4. Create the resume_screening\ jd\ results\ input folders
 #   5. (optional) Pre-download docling OCR / layout models
 #   6. Launch the tool
 #
@@ -103,11 +103,11 @@ if (Test-Path $envFile) {
 
 # --- 4. Input folders ---
 Write-Step 4 "Creating input folders"
-foreach ($dir in @("resumes", "jd", "results")) {
+foreach ($dir in @("resume_screening", "jd", "results")) {
     $path = Join-Path $scriptDir $dir
     if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path | Out-Null }
 }
-Write-Ok "resumes\, jd\, results\ ready."
+Write-Ok "resume_screening\, jd\, results\ ready."
 
 # --- 5. Pre-download docling models (optional) ---
 if ($DownloadModels) {

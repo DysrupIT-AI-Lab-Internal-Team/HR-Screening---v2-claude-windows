@@ -14,6 +14,9 @@ dependencies = [
     "torchvision==0.19.1",
     "colorama",
     "python-dotenv",
+    # BambooHR resume downloader (Main Menu -> Download Resume)
+    "requests>=2.31.0",
+    "rich>=13.0.0",
 ]
 
 [tool.black]

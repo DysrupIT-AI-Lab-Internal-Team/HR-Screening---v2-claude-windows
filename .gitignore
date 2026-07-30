@@ -47,5 +47,7 @@ screening_history_v2.json
 *.tmp
 
 # Sensitive data — candidate resumes are personal data, keep local only
-
+# resume_downloads/ = BambooHR resume downloads + per-job state files
+resume_downloads/
+logs/
 

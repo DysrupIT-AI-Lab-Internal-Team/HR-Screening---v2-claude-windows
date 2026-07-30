@@ -11,6 +11,7 @@ An AI-powered resume screening tool built for Windows, using Claude Code Pro as 
 - **Job description writer** — generate professional JDs with Claude
 - **Phone screening generator** — produce tailored HR interview questions
 - **Screening history** — view past results filtered by JD
+- **Resume downloader** — pull applicant resumes straight from BambooHR by job opening (built into the menu)
 - **Maintenance tools** — delete JDs, resumes, and their tracking records together
 
 ### Windows-specific optimizations
@@ -101,7 +102,7 @@ project/
 ├── .env                        ← local config (never committed)
 ├── .venv/                      ← Python 3.12 virtual environment
 ├── screening_history_v2.json   ← auto-created on first run
-├── resumes/
+├── resume_screening/
 │   └── <role-name>/            ← one subfolder per role
 │       ├── candidate1.pdf
 │       └── candidate2.txt
@@ -112,7 +113,7 @@ project/
     └── screening_<role>_<timestamp>.csv
 ```
 
-Place resume files (`.pdf` or `.txt`) inside subfolders under `resumes/`.  
+Place resume files (`.pdf` or `.txt`) inside subfolders under `resume_screening/`.  
 Place job description files (`.txt` or `.md`) inside `jd/`.
 
 ---
@@ -138,7 +139,51 @@ would use the system Python and docling will fail on Python 3.13+.
 | Write a Job Description | Generate a JD with Claude |
 | Generate Phone Screening Questions | Create HR interview questions for a role |
 | View Screening History | Browse past results filtered by JD |
+| Download Resume | Download applicant resumes from BambooHR by job opening |
 | Maintenance | Delete JDs and/or resumes with tracking cleanup |
+
+### Download Resume (BambooHR)
+
+Pulls applicant resumes straight from BambooHR, organized into
+`resume_downloads/<id> - <requisition name>/<pipeline-stage>/` folders
+(e.g. `resume_downloads/788 - Dynamics CRM developer/Hired/`). It reuses the same numbered-menu
+navigation as the rest of the tool (`[0]` goes back, `b` returns to the menu),
+and exposes every feature of the standalone downloader:
+
+| Sub-option | Description |
+|------------|-------------|
+| List Job Openings | List jobs and their IDs, filtered by status |
+| Download Resumes for a Job | Download resumes for a job ID, with applicant-status filter and force re-download |
+| Show Download Report | Render the summary dashboard from saved state (no API calls) |
+| Migrate v1 Files → v2 Stage Folders | Reorganize old flat filenames into stage subfolders |
+| Test API Connection | Verify your BambooHR API key and subdomain |
+
+Requires `BAMBOOHR_API_KEY` and `BAMBOOHR_SUBDOMAIN` in your `.env` (see
+`.env.example`). If they are not set, the menu explains what to add and returns.
+
+---
+
+## Project structure
+
+```
+hr_screening_tool_v2_win.py   Main entry point — the interactive menu tool
+cli_common.py                 Shared menu/navigation helpers (used by both features)
+bamboo_downloader.py          "Download Resume" menu front-end
+bamboohr/                     BambooHR downloader package
+  client.py                     API client
+  files.py                      filename building + safe file writes
+  tracker.py                    per-job download-state tracking
+  stats.py                      Rich summary dashboard
+  logger.py                     logging setup
+jd/                           Job descriptions (screening inputs)
+resume_screening/             Resumes to screen, grouped by role folder
+results/                      Screening result CSVs
+resume_downloads/             BambooHR downloads: "<id> - <title>/<stage>/" + state files (git-ignored)
+docs/                         BambooHR downloader admin & how-to guides
+```
+
+The resume downloader was originally a separate command-line project; its
+features are now fully merged into this tool and reached through the menu.
 
 ---
 

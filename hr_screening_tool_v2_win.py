@@ -32,6 +32,18 @@ from datetime import datetime
 from pathlib import Path
 from contextlib import contextmanager
 
+# Shared navigation primitives (numbered menus, back-navigation, BackToMenu).
+# These live in cli_common so the bundled BambooHR resume downloader can reuse
+# the exact same navigation — and share the one BackToMenu exception class.
+from cli_common import (
+    BackToMenu,
+    print_header,
+    print_menu,
+    print_submenu,
+    nav_input,
+)
+from bamboo_downloader import download_resume_menu
+
 # python-dotenv is optional at runtime: if it's missing we fall back to the
 # process environment so the tool still runs without a .env present.
 try:
@@ -150,7 +162,7 @@ except (ImportError, OSError):
 # ─────────────────────────────────────────────
 
 TRACKING_FILE = "screening_history_v2.json"
-RESUMES_DIR = Path("resumes")
+RESUMES_DIR = Path("resume_screening")
 JD_DIR = Path("jd")
 RESULTS_DIR = Path("results")
 SUPPORTED_RESUME_TYPES = [".pdf", ".txt"]
@@ -398,45 +410,6 @@ def is_already_analyzed(tracking, filename, file_hash, jd_hash):
     if not record:
         return False
     return record.get("file_hash") == file_hash and record.get("jd_hash") == jd_hash
-
-
-def print_header(title):
-    width = 62
-    print("\n" + "-" * width)
-    print(f"  {title}")
-    print("-" * width)
-
-
-def print_menu(options):
-    """Print a numbered menu and return the user's choice."""
-    for i, option in enumerate(options, 1):
-        print(f"  [{i}] {option}")
-    print("  [0] Exit")
-    print()
-    while True:
-        choice = input("  Select an option: ").strip()
-        if choice == "0":
-            print("\n  Goodbye!\n")
-            sys.exit(0)
-        if choice.isdigit() and 1 <= int(choice) <= len(options):
-            return int(choice)
-        print("  [!]  Invalid choice. Please try again.")
-
-
-def print_submenu(options):
-    """Print a numbered submenu with [0] Back to Main Menu."""
-    for i, option in enumerate(options, 1):
-        print(f"  [{i}] {option}")
-    print("  [0] Back to Main Menu")
-    print()
-    while True:
-        choice = input("  Select an option: ").strip()
-        if choice == "0":
-            print("\n  <<  Returning to Main Menu...\n")
-            raise BackToMenu()
-        if choice.isdigit() and 1 <= int(choice) <= len(options):
-            return int(choice)
-        print("  [!]  Invalid choice. Please try again.")
 
 
 def load_file_text(filepath):
@@ -950,26 +923,6 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
 
 
 # ─────────────────────────────────────────────
-# NAVIGATION
-# ─────────────────────────────────────────────
-
-class BackToMenu(Exception):
-    """Raised when the user types 'b' to return to the Main Menu."""
-    pass
-
-
-def nav_input(prompt):
-    """
-    Wrapper around input() that raises BackToMenu when the user types 'b' or 'back'.
-    """
-    value = input(f"{prompt}  (or 'b' to go back)\n  > ").strip()
-    if value.lower() in ("b", "back"):
-        print("\n  <<  Returning to Main Menu...\n")
-        raise BackToMenu()
-    return value
-
-
-# ─────────────────────────────────────────────
 # MENU ACTIONS
 # ─────────────────────────────────────────────
 
@@ -1448,6 +1401,7 @@ def main():
             "Write a Job Description",
             "Generate Phone Screening Questions",
             "View Screening History",
+            "Download Resume            (BambooHR job openings)",
             "Maintenance",
         ])
 
@@ -1465,6 +1419,8 @@ def main():
             elif choice == 6:
                 view_tracking()
             elif choice == 7:
+                download_resume_menu()
+            elif choice == 8:
                 maintenance_menu()
         except BackToMenu:
             continue

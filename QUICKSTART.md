@@ -199,11 +199,11 @@ uv run docling-tools models download
 Create the required input folders if they don't exist:
 
 ```powershell
-New-Item -ItemType Directory -Force resumes, jd, results
+New-Item -ItemType Directory -Force resume_screening, jd, results
 ```
 
-- Drop **resume files** (`.pdf` or `.txt`) into subfolders under `resumes\`  
-  e.g. `resumes\DevOps Engineer\john_doe.pdf`
+- Drop **resume files** (`.pdf` or `.txt`) into subfolders under `resume_screening\`  
+  e.g. `resume_screening\DevOps Engineer\john_doe.pdf`
 - Drop **job description files** (`.txt` or `.md`) into `jd\`  
   e.g. `jd\devops_engineer.txt`
 
