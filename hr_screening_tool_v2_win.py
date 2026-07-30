@@ -319,15 +319,21 @@ async def ask_claude_async(prompt):
         if _shutdown_requested:
             raise RuntimeError("Shutdown requested by user")
 
-        cmd = [CLAUDE_EXE, "-p", prompt, "--output-format", "text"]
+        # Pass the prompt via STDIN, not as a command-line argument. The prompt
+        # includes the full JD + resume text and easily exceeds Windows' ~32 KB
+        # command-line length limit, which otherwise fails with
+        # "The command line is too long." `claude -p` with no prompt argument
+        # reads the prompt from stdin, which has no such limit.
+        cmd = [CLAUDE_EXE, "-p", "--output-format", "text"]
         if CLAUDE_MODEL:
             cmd += ["--model", CLAUDE_MODEL]
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout_bytes, stderr_bytes = await proc.communicate()
+        stdout_bytes, stderr_bytes = await proc.communicate(input=prompt.encode("utf-8"))
 
         if proc.returncode == 0:
             return stdout_bytes.decode("utf-8", errors="replace").strip()
