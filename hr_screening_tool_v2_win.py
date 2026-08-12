@@ -184,6 +184,61 @@ RETRY_BASE_DELAY = 5  # initial retry wait in seconds (doubles each attempt)
 
 
 # ─────────────────────────────────────────────
+# CLAUDE USAGE LIMIT
+# ─────────────────────────────────────────────
+
+_usage_limit_hit = False    # subscription quota is spent — stop the batch
+_usage_limit_reset = None   # local-time string of the reset, if Claude reported one
+
+
+class UsageLimitReached(RuntimeError):
+    """Raised when the Claude subscription quota is exhausted.
+
+    Distinct from a transient rate limit: backing off and retrying will not
+    help until the quota window resets, so the batch stops instead of burning
+    through every remaining resume in seconds.
+    """
+
+
+# Substrings that mean "quota spent" rather than "slow down". Kept separate
+# from the rate-limit keywords so the two get very different treatment.
+USAGE_LIMIT_KEYWORDS = [
+    "usage limit",
+    "limit reached",
+    "limit will reset",
+    "out of credits",
+    "credit balance is too low",
+    "insufficient credit",
+]
+
+
+def _parse_reset_time(stderr):
+    """Extract the quota reset time from Claude's message, if it carries one.
+
+    The CLI reports it as a trailing Unix timestamp, e.g.
+    "Claude AI usage limit reached|1754923200". Returns a local-time string,
+    or None when no timestamp is present.
+    """
+    match = re.search(r"\|\s*(\d{10,13})\b", stderr)
+    if not match:
+        return None
+    ts = int(match.group(1))
+    if ts > 10**12:  # milliseconds
+        ts //= 1000
+    try:
+        return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+    except (OSError, ValueError, OverflowError):
+        return None
+
+
+def _usage_limit_message():
+    """One-line description of the limit, including the reset time if known."""
+    if _usage_limit_reset:
+        return f"Claude usage limit reached -- resets at {_usage_limit_reset}"
+    return "Claude usage limit reached"
+
+
+# ─────────────────────────────────────────────
 # GRACEFUL SHUTDOWN
 # ─────────────────────────────────────────────
 
@@ -308,8 +363,16 @@ async def ask_claude_async(prompt):
     On Windows this leverages IOCP (I/O Completion Ports) — the
     fastest async I/O mechanism on the platform.
 
-    Retries with exponential backoff on rate limit errors.
+    Retries with exponential backoff on rate limit errors. A subscription
+    usage limit is not retried — it raises UsageLimitReached immediately.
     """
+    global _usage_limit_hit, _usage_limit_reset
+
+    # Quota already spent by an earlier call — fail fast rather than spending
+    # a subprocess proving it again.
+    if _usage_limit_hit:
+        raise UsageLimitReached(_usage_limit_message())
+
     # Throttle: non-blocking wait before each call
     if REQUEST_DELAY > 0:
         await asyncio.sleep(REQUEST_DELAY)
@@ -346,6 +409,18 @@ async def ask_claude_async(prompt):
             for kw in ["rate limit", "429", "too many requests", "overloaded"]
         )
 
+        # Quota exhausted — retrying will not help until the window resets, so
+        # stop the whole batch. Tested only when the error is *not* a transient
+        # rate limit: "rate limit reached" must keep its backoff, and wrongly
+        # aborting a 200-resume run costs more than three wasted retries.
+        if not is_rate_limit and any(
+            kw in stderr.lower() for kw in USAGE_LIMIT_KEYWORDS
+        ):
+            if not _usage_limit_hit:
+                _usage_limit_hit = True
+                _usage_limit_reset = _parse_reset_time(stderr)
+            raise UsageLimitReached(_usage_limit_message())
+
         if is_rate_limit and attempt < RETRY_MAX - 1:
             print(
                 f"\n  [~]  Rate limit hit -- waiting {delay}s before retry "
@@ -364,6 +439,11 @@ def ask_claude(prompt):
     Synchronous wrapper around ask_claude_async.
     Used by features that don't need batch parallelism (JD writing, phone screening).
     """
+    global _usage_limit_hit, _usage_limit_reset
+    # A deliberate one-off call always gets to try — the quota may have reset
+    # since whatever batch tripped the flag.
+    _usage_limit_hit = False
+    _usage_limit_reset = None
     return asyncio.run(ask_claude_async(prompt))
 
 
@@ -625,6 +705,11 @@ async def screen_single_resume_async(
     if _shutdown_requested:
         return "interrupted", filename, None, None
 
+    # Quota already spent — return quietly so the rest of the sub-batch does
+    # not print one failure line per resume.
+    if _usage_limit_hit:
+        return "limit", filename, None, None
+
     candidate_name = Path(filename).stem.replace("_", " ").title()
     file_hash = get_file_hash(filepath)
     already_done = is_already_analyzed(tracking, filename, file_hash, jd_hash)
@@ -736,6 +821,11 @@ Respond in EXACTLY this JSON format with no extra text:
         }
         return "ok", filename, result_row, tracking_record
 
+    except UsageLimitReached:
+        # No result row: the resume is left unanalyzed and untracked, so a
+        # re-run after the reset picks it straight back up.
+        return "limit", filename, None, None
+
     except Exception as e:
         print(f"  [X]  {candidate_name} -- analysis error: {e}")
         return "error", filename, {
@@ -778,8 +868,11 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
       force_all   - if True, ignore tracking and re-analyze all
       force_file  - if set, only re-analyze this specific filename
     """
-    global _shutdown_requested
+    global _shutdown_requested, _usage_limit_hit, _usage_limit_reset
     _shutdown_requested = False
+    # Clear any limit from a previous run — the quota may have reset since.
+    _usage_limit_hit = False
+    _usage_limit_reset = None
 
     folder_path = Path(folder)
     files = list_resume_files(folder)
@@ -859,6 +952,7 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
     print(f"\n  Processing...\n")
     results = []
     skipped = []
+    unprocessed = []   # queued but never screened — usage limit stopped the run
 
     # ── Sub-batch processing with pauses (elevated priority) ──
     with _elevated_priority():
@@ -877,9 +971,27 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
                     results.append(result_row)
                 if status == "skipped":
                     skipped.append(filename)
+                if status == "limit":
+                    unprocessed.append(filename)
                 if status == "ok" and tracking_record:
                     tracking["resumes"][filename] = tracking_record
                     save_tracking(tracking)
+
+            # ── Quota spent: stop now instead of failing every resume left ──
+            if _usage_limit_hit:
+                unprocessed.extend(t[0] for t in task_args[batch_start + len(sub_batch):])
+                print(f"\n  {'-' * 58}")
+                print(f"  [!]  CLAUDE USAGE LIMIT REACHED -- screening stopped")
+                print(f"  {'-' * 58}")
+                if _usage_limit_reset:
+                    print(f"       Quota resets at:  {_usage_limit_reset}")
+                else:
+                    print(f"       Your Claude subscription quota is exhausted.")
+                print(f"       Screened so far:  {len(results)} resume(s)")
+                print(f"       Not processed:    {len(unprocessed)} resume(s)")
+                print(f"\n       Re-run this same screening after the reset --")
+                print(f"       completed resumes are cached and will be skipped.")
+                break
 
             remaining = len(task_args) - (batch_start + len(sub_batch))
             if remaining > 0 and not _shutdown_requested:
@@ -892,7 +1004,11 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
                 print()
 
     if not results:
-        print("\n  No results to save.")
+        if _usage_limit_hit:
+            print("\n  No results to save -- the usage limit was hit before "
+                  "any resume finished.\n")
+        else:
+            print("\n  No results to save.")
         return
 
     # ── Save CSV ──────────────────────────────────────────────
@@ -913,7 +1029,8 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
     analyzed = len(results) - len(skipped)
     print_header("[#]  Screening Summary")
     print(f"  Role:      {role_name}")
-    print(f"  Analyzed:  {analyzed}  |  Skipped (cached): {len(skipped)}\n")
+    limit_note = f"  |  Not processed (usage limit): {len(unprocessed)}" if unprocessed else ""
+    print(f"  Analyzed:  {analyzed}  |  Skipped (cached): {len(skipped)}{limit_note}\n")
     print(f"  {'Candidate':<25} {'Score':<7} {'Recommendation':<15} {'PDF Quality'}")
     print(f"  {'-'*25} {'-'*7} {'-'*15} {'-'*15}")
     for r in sorted_results:
@@ -922,7 +1039,11 @@ def run_batch_screening(folder, jd_path, role_name, force_all=False, force_file=
         print(f"  {icon} {r['Candidate']:<24} {str(r['Fit Score']):<7} {r['Recommendation']:<15} {r['PDF Quality']}{cached}")
 
     print(f"\n  [OK]  Results saved to: {output_file}")
-    if _shutdown_requested:
+    if _usage_limit_hit:
+        reset = f" (resets at {_usage_limit_reset})" if _usage_limit_reset else ""
+        print(f"  [!]  Partial results -- Claude usage limit reached{reset}.")
+        print(f"       {len(unprocessed)} resume(s) not screened. Re-run after the reset.\n")
+    elif _shutdown_requested:
         print(f"  [!]  Partial results -- interrupted by user. Re-run to continue.\n")
     else:
         print()
