@@ -401,11 +401,19 @@ async def ask_claude_async(prompt):
         if proc.returncode == 0:
             return stdout_bytes.decode("utf-8", errors="replace").strip()
 
+        # `claude -p` reports failures on STDOUT, not stderr — an invalid model,
+        # an exhausted quota and a rate limit all exit non-zero with stderr
+        # empty. Classify on both streams so the keyword tests below actually
+        # see the message instead of an empty string.
+        stdout = stdout_bytes.decode("utf-8", errors="replace").strip()
         stderr = stderr_bytes.decode("utf-8", errors="replace").strip()
+        err_text = "\n".join(t for t in (stderr, stdout) if t) or (
+            f"claude exited with code {proc.returncode} and no output"
+        )
 
         # Detect rate limit vs hard error
         is_rate_limit = any(
-            kw in stderr.lower()
+            kw in err_text.lower()
             for kw in ["rate limit", "429", "too many requests", "overloaded"]
         )
 
@@ -414,11 +422,11 @@ async def ask_claude_async(prompt):
         # rate limit: "rate limit reached" must keep its backoff, and wrongly
         # aborting a 200-resume run costs more than three wasted retries.
         if not is_rate_limit and any(
-            kw in stderr.lower() for kw in USAGE_LIMIT_KEYWORDS
+            kw in err_text.lower() for kw in USAGE_LIMIT_KEYWORDS
         ):
             if not _usage_limit_hit:
                 _usage_limit_hit = True
-                _usage_limit_reset = _parse_reset_time(stderr)
+                _usage_limit_reset = _parse_reset_time(err_text)
             raise UsageLimitReached(_usage_limit_message())
 
         if is_rate_limit and attempt < RETRY_MAX - 1:
@@ -429,7 +437,7 @@ async def ask_claude_async(prompt):
             await asyncio.sleep(delay)
             delay *= 2  # exponential backoff: 5 -> 10 -> 20 -> 40
         else:
-            raise RuntimeError(f"Claude error: {stderr}")
+            raise RuntimeError(f"Claude error: {err_text}")
 
     raise RuntimeError(f"Claude failed after {RETRY_MAX} attempts.")
 
