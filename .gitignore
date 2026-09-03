@@ -51,3 +51,7 @@ screening_history_v2.json
 resume_downloads/
 logs/
 
+# resume_screening/ = resumes staged for screening
+# results/          = screening reports (candidate names + AI assessments)
+resume_screening/
+results/
